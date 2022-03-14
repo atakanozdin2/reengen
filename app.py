@@ -7,6 +7,7 @@ import openpyxl
 import plotly.graph_objects as go
 import warnings
 warnings.filterwarnings("ignore")
+import sklearn
 
 # --------------------------------------------------------------------------------------------------------
 import requests

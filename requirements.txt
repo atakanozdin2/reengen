@@ -3,3 +3,6 @@ plotly==5.6.0
 streamlit==1.7.0
 catboost==1.0.4
 openpyxl==3.0.9
+xgboost==1.5.2
+sklearn==1.0
+lightgbm==3.2.1
