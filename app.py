@@ -56,64 +56,6 @@ def rolling_features(df,fh):
         df_c['consumption_lag_'+str(l)]=df_c['consumption (kWh)'].shift(l)
     return(df_c)
 
-def forecast_func(df,fh):
-    fh_new=24*31+1
-    date = pd.date_range("2020-01-01", periods=744, freq="H")
-    date = pd.DataFrame(index=date,columns=df.columns)
-    date= date.reset_index()
-    del date['datetime']
-    date.rename(columns={'date': 'datetime'}, inplace=True)
-    df_fe=df.append(date)
-
-    #feature engineering
-    df_fe=rolling_features(df_fe,fh_new)
-    df_fe=date_features(df_fe)
-    df_fe=df_fe.iloc[fh_new+30:].reset_index(drop=True)
-
-    #train/test split
-    split_date = pd.to_datetime(df_fe.datetime).tail(fh_new).iloc[0]
-    print(split_date)
-    historical = df_fe.loc[df_fe.datetime <= split_date]
-    y=historical[['datetime','consumption (kWh)']].set_index('datetime')
-    X=historical.drop('consumption (kWh)',axis=1).set_index('datetime')
-    forecast_df=df_fe.loc[df_fe.datetime > split_date].set_index('datetime').drop('consumption (kWh)',axis=1)
-
-
-    tscv = TimeSeriesSplit(n_splits=3,test_size=fh_new)
-    
-    score_list = []
-    fold = 1
-    unseen_preds = []
-    importance = []
-    #cross validation step
-    for train_index, test_index in tscv.split(X,y):
-        X_train, X_val = X.iloc[train_index], X.iloc[test_index]
-        y_train, y_val = y.iloc[train_index], y.iloc[test_index]
-        print(X_train.shape,X_val.shape)
-
-        cat = CatBoostRegressor(iterations=1000,eval_metric='MAE',allow_writing_files=False)
-        cat.fit(X_train,y_train,eval_set=[(X_val,y_val)],early_stopping_rounds=150,verbose=50)
-
-        forecast_predicted=cat.predict(forecast_df)
-        unseen_preds.append(forecast_predicted)
-
-        score = mean_absolute_error(y_val,cat.predict(X_val))
-        print(f"MAE Fold-{fold} : {score}")
-        score_list.append(score)
-        importance.append(cat.get_feature_importance())
-        fold+=1
-    print("CV Mean Score:",np.mean(score_list))
-    print(r2_score(y_val,cat.predict(X_val)))
-
-    forecasted=pd.DataFrame(unseen_preds[2],columns=['forecasting']).set_index(forecast_df.index)
-
-    fig1 = go.Figure()
-    fig1.add_trace(go.Scatter(x=df_fe.date.iloc[-fh_new*5:],y=df_fe.consumption.iloc[-fh_new*5:],name='Tarihsel Veri',mode='lines'))
-    fig1.add_trace(go.Scatter(x=forecasted.index,y=forecasted["forecasting"],name='Öngörü',mode='lines'))
-    fig1.update_layout(legend=dict(orientation="h",yanchor="bottom",y=1.02,xanchor="right",x=1))
-    f_importance=pd.concat([pd.Series(X.columns.to_list(),name="Feature"),pd.Series(np.mean(importance,axis=0),name="Importance")],axis=1).sort_values(by="Importance",ascending=True)
-    fig2 = px.bar(f_importance.tail(10), x='Importance', y='Feature')
-    return fig1,fig2
 # --------------------------------------------------------------------------------------------------------
 
 st.set_page_config(page_title="Öngörü Aracı")
@@ -133,7 +75,65 @@ if page == "Öngörü":
             start_date="2018-01-01 00:00:00"
             end_date="2020-01-31 23:00:00"
             df=get_consumption_data(start_date=str(start_date),end_date=str(end_date)).iloc[:-1]
-            fig1,fig2 = forecast_func(df,select_period(fh_selection))
+            
+            #fig1,fig2 = forecast_func(df,select_period(fh_selection))
+            
+            #--------------------------------------------------------------------------------------------
+            fh_new=24*31+1
+            date=pd.date_range(start=df.datetime.tail(1).iloc[0],periods=fh_new,freq='H',name='date')
+            date = pd.DataFrame(index=date,columns=df.columns)
+            date= date.reset_index()
+            del date['datetime']
+            date.rename(columns={'date': 'datetime'}, inplace=True)
+
+            df_fe=df.append(date)
+            df_fe=rolling_features(df_fe,fh_new)
+            df_fe=date_features(df_fe)
+            df_fe=df_fe[fh_new+30:].reset_index(drop=True)
+            split_date = df_fe.datetime.tail(fh_new).iloc[0]
+            historical=df_fe.loc[df_fe.datetime < split_date]
+            y=historical[['datetime','consumption (kWh)']].set_index('datetime')
+            X=historical.drop('consumption (kWh)',axis=1).set_index('datetime')
+            forecast_df=df_fe.loc[df_fe.datetime > split_date].set_index('datetime').drop('consumption (kWh)',axis=1)
+
+            tscv = TimeSeriesSplit(n_splits=3,test_size=fh_new)
+            score_list = []
+            fold = 1
+            unseen_preds = []
+            importance = []
+
+            for train_index,test_index in tscv.split(X,y):
+                X_train,X_val = X.iloc[train_index],X.iloc[test_index]
+                y_train,y_val = y.iloc[train_index],y.iloc[test_index]
+                print(X_train.shape,X_val.shape)
+
+                cat = CatBoostRegressor(iterations = 1000, eval_metric='MAE', allow_writing_files=False)
+                cat.fit(X_train,y_train,eval_set=[(X_val,y_val)],early_stopping_rounds=150,verbose=50)
+
+                forecast_predicted=cat.predict(forecast_df)
+                unseen_preds.append(forecast_predicted)
+                score = mean_absolute_error(y_val,cat.predict(X_val))
+                print(f"MAE FOLD-{fold}:{score}")
+                score_list.append(score)
+                importance.append(cat.get_feature_importance())
+                fold+=1
+            print("CV Mean Score:",np.mean(score_list))
+
+            forecasted=pd.DataFrame(unseen_preds[2],columns=["forecasting"]).set_index(forecast_df.index)
+
+            fig1 = go.Figure()
+            fig1.add_trace(go.Scatter(x=df_fe.datetime.iloc[-fh_new*5:],y=df_fe['consumption (kWh)'].iloc[-fh_new*5:],name='Geçmiş Veriler',mode='lines'))
+            fig1.add_trace(go.Scatter(x=forecasted.index,y=forecasted['forecasting'],name='Öngörüfig2',mode='lines'))
+
+            f_importance = pd.concat([pd.Series(X.columns.to_list(),name='Feature'),
+                          pd.Series(importance[2],name="Importance")],axis=1).sort_values(by='Importance')
+            
+            
+            fig2 = px.bar(f_importance.tail(20), x="Importance", y='Feature')
+            fig2.show()
+
+            #--------------------------------------------------------------------------------------------
+
             st.markdown("<h3 style='text-align:center;'>Tahmin sonuçları</h3>",unsafe_allow_html=True)
             st.plotly_chart(fig1)
             st.markdown("<h3 style='text-align:center;'>Model için en önemli değişkenler</h3>",unsafe_allow_html=True)
@@ -141,10 +141,9 @@ if page == "Öngörü":
 
 elif page == "Görselleştirme":
     st.markdown("<h1 style='text-align:center;'>Veri Görselleştirme Sekmesi</h1>",unsafe_allow_html=True)
-    start_date="2018-01-01 00:00:00"
-    end_date="2020-01-31 23:00:00"
-    #start_date=st.sidebar.date_input(label="Başlangıç Tarihi",value=datetime.date.today()-datetime.timedelta(days=10),max_value=datetime.date.today())
-    #end_date=st.sidebar.date_input(label="Bitiş Tarihi",value=datetime.date.today())
+
+    start_date=st.sidebar.date_input(label="Başlangıç Tarihi",value=datetime.date.today()-datetime.timedelta(days=10),max_value=datetime.date.today())
+    end_date=st.sidebar.date_input(label="Bitiş Tarihi",value=datetime.date.today())
     
     df_vis = get_consumption_data(start_date=str(start_date),end_date=str(end_date))
     df_describe=pd.DataFrame(df_vis.describe())
