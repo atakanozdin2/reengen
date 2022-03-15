@@ -73,7 +73,7 @@ def forecast_func(df,fh):
     #train/test split
     split_date = pd.to_datetime(df_fe.datetime).tail(fh_new).iloc[0]
     print(split_date)
-    historical = df_fe.loc[df_fe.date < split_date]
+    historical = df_fe.loc[df_fe.datetime < split_date]
     y=historical[['datetime','consumption (kWh)']].set_index('datetime')
     X=historical.drop('consumption (kWh)',axis=1).set_index('datetime')
     forecast_df=df_fe.loc[df_fe.datetime > split_date].set_index('datetime').drop('consumption (kWh)',axis=1)
