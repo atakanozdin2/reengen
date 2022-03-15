@@ -22,7 +22,7 @@ from sklearn.model_selection import TimeSeriesSplit,train_test_split
 from catboost import CatBoostRegressor
 
 def select_period(period):
-    periods={"1 gün":24,"2 gün":48,"3 gün":72,"1 hafta":168,"2 hafta":336}
+    periods={"1 gün":24,"2 gün":48,"3 gün":72,"1 hafta":168,"2 hafta":336,"3 hafta":504," hafta":672}
     return periods[period]
 
 def get_consumption_data(start_date,end_date):
@@ -130,7 +130,7 @@ if page == "Öngörü":
 
     if button==True:
         with st.spinner("Tahmin yapılıyor, lütfen bekleyiniz..."):
-            start_date="2020-01-01 00:00:00"
+            start_date="2018-01-01 00:00:00"
             end_date="2020-01-31 23:00:00"
             df=get_consumption_data(start_date=str(start_date),end_date=str(end_date)).iloc[:-1]
             fig1,fig2 = forecast_func(df,select_period(fh_selection))
@@ -141,17 +141,20 @@ if page == "Öngörü":
 
 elif page == "Görselleştirme":
     st.markdown("<h1 style='text-align:center;'>Veri Görselleştirme Sekmesi</h1>",unsafe_allow_html=True)
-    start_date=st.sidebar.date_input(label="Başlangıç Tarihi",value=datetime.date.today()-datetime.timedelta(days=10),max_value=datetime.date.today())
-    end_date=st.sidebar.date_input(label="Bitiş Tarihi",value=datetime.date.today())
+    start_date="2018-01-01 00:00:00"
+    end_date="2020-01-31 23:00:00"
+    #start_date=st.sidebar.date_input(label="Başlangıç Tarihi",value=datetime.date.today()-datetime.timedelta(days=10),max_value=datetime.date.today())
+    #end_date=st.sidebar.date_input(label="Bitiş Tarihi",value=datetime.date.today())
+    
     df_vis = get_consumption_data(start_date=str(start_date),end_date=str(end_date))
     df_describe=pd.DataFrame(df_vis.describe())
     st.markdown("<h3 style='text-align:center;'>Tüketim-Tanımlayıcı İstatistikler</h3>",unsafe_allow_html=True)
     st.table(df_describe)
 
     fig3=go.Figure()
-    fig3.add_trace(go.Scatter(x=df_vis.date,y=df_vis.consumption,mode='lines',name='Tüketim (MWh)'))
+    fig3.add_trace(go.Scatter(x=df_vis.datetime,y=df_vis['consumption (kWh)'],mode='lines',name='Tüketim (kWh)'))
     fig3.update_layout(xaxis_title='Date',yaxis_title="Consumption")
-    st.markdown("<h3 style='text-align:center;'>Saatlik Tüketim (MWh)</h3>",unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align:center;'>Tüketim (kWh)</h3>",unsafe_allow_html=True)
     st.plotly_chart(fig3)
 
 elif page == "Hakkında":
