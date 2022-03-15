@@ -58,9 +58,8 @@ def rolling_features(df,fh):
 
 def forecast_func(df,fh,i):
     fh_new=24*31+1
-    date=pd.date_range(start=df.datetime.tail(1).iloc[0],periods=fh_new,freq='H',name='date')
+    date = pd.date_range("2020-01-01", periods=744, freq="H")
     date = pd.DataFrame(index=date,columns=df.columns)
-    date = date.drop(0)
     date= date.reset_index()
     del date['datetime']
     date.rename(columns={'date': 'datetime'}, inplace=True)
@@ -74,7 +73,7 @@ def forecast_func(df,fh,i):
     #train/test split
     split_date = pd.to_datetime(df_fe.datetime).tail(fh_new).iloc[0]
     print(split_date)
-    historical = df_fe.loc[df_fe.datetime < split_date]
+    historical = df_fe.loc[df_fe.datetime <= split_date]
     y=historical[['datetime','consumption (kWh)']].set_index('datetime')
     X=historical.drop('consumption (kWh)',axis=1).set_index('datetime')
     forecast_df=df_fe.loc[df_fe.datetime > split_date].set_index('datetime').drop('consumption (kWh)',axis=1)
