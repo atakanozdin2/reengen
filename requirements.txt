@@ -6,3 +6,4 @@ scikit-learn==0.24.2
 lightgbm==3.2.1
 catboost==1.0.0
 openpyxl==3.0.9
+prophet==1.0.1

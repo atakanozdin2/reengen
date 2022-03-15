@@ -79,65 +79,61 @@ if page == "Öngörü":
             #fig1,fig2 = forecast_func(df,select_period(fh_selection))
             
             #--------------------------------------------------------------------------------------------
-            fh_new=24*31+1
-            date = pd.date_range("2020-01-01", periods=744, freq="H")
-            date = pd.DataFrame(index=date,columns=df.columns)
-            date= date.reset_index()
-            del date['datetime']
-            date.rename(columns={'date': 'datetime'}, inplace=True)
+            df1=df.copy()
+            df1['ds']=df1.datetime
+            df1['y']=df1['temperature (Celsius)'] 
+            df1['ds']= pd.to_datetime(df1['ds'])
+            
+            from prophet import Prophet
+            model = Prophet()
+            model.fit(df1)
 
-            df_fe=df.append(date)
-            df_fe=rolling_features(df_fe,fh_new)
-            df_fe=date_features(df_fe)
-            df_fe=df_fe[fh_new+30:].reset_index(drop=True)
-            split_date = df_fe.datetime.tail(fh_new).iloc[0]
-            historical=df_fe.loc[df_fe.datetime <= split_date]
-            y=historical[['datetime','consumption (kWh)']].set_index('datetime')
-            X=historical.drop('consumption (kWh)',axis=1).set_index('datetime')
-            forecast_df=df_fe.loc[df_fe.datetime > split_date].set_index('datetime').drop('consumption (kWh)',axis=1)
+            future_temp = pd.date_range("2020-01-01", periods=744, freq="H") # 744 is 31x24 hours
+            future_temp = pd.DataFrame(future_temp)
+            future_temp.columns = ['ds']
+            future_temp['ds']= pd.to_datetime(future_temp['ds'])
 
-            tscv = TimeSeriesSplit(n_splits=3,test_size=fh_new)
-            score_list = []
-            fold = 1
-            unseen_preds = []
-            importance = []
+            #predict model
+            forecast_temp = model.predict(future_temp)
+            
+            #Prophet for Consumption with Temperature
+            future_con = pd.date_range("2020-01-01", periods=744, freq="H") # 744 is 31x24 hours
+            future_con = pd.DataFrame(future_con)
+            future_con.columns = ['ds']
+            future_con['ds']= pd.to_datetime(future_con['ds'])
 
-            for train_index,test_index in tscv.split(X,y):
-                X_train,X_val = X.iloc[train_index],X.iloc[test_index]
-                y_train,y_val = y.iloc[train_index],y.iloc[test_index]
-                print(X_train.shape,X_val.shape)
+            future_con = future_con.assign(temp=forecast_temp['yhat'])
+            future_con.rename(columns={'temp': 'temperature (Celsius)'}, inplace=True)
 
-                cat = CatBoostRegressor(iterations = 1000, eval_metric='MAE', allow_writing_files=False)
-                cat.fit(X_train,y_train,eval_set=[(X_val,y_val)],early_stopping_rounds=150,verbose=50)
+            df2=df.copy()
 
-                forecast_predicted=cat.predict(forecast_df)
-                unseen_preds.append(forecast_predicted)
-                score = mean_absolute_error(y_val,cat.predict(X_val))
-                print(f"MAE FOLD-{fold}:{score}")
-                score_list.append(score)
-                importance.append(cat.get_feature_importance())
-                fold+=1
-            print("CV Mean Score:",np.mean(score_list))
+            df2['ds']=df2.datetime
+            df2['y']=df2['consumption (kWh)']
 
-            forecasted=pd.DataFrame(unseen_preds[2],columns=["forecasting"]).set_index(forecast_df.index)
+            modelx = Prophet()
+            modelx.add_regressor('temperature (Celsius)')
+            modelx.fit(df2) 
+            
+            forecast_con = modelx.predict(future_con)
+
+            result =pd.DataFrame()
+            result['datetime'] = forecast_con['ds']
+            result['consumption (kWh)']=forecast_con['yhat']
+            result['temperature (Celsius)']=future_con['temperature (Celsius)']
+
+            result.set_index('datetime')
+            df_final = df.append(result)
+
+            import plotly.graph_objects as go
 
             fig1 = go.Figure()
-            fig1.add_trace(go.Scatter(x=df_fe.datetime.iloc[-fh_new*5:],y=df_fe['consumption (kWh)'].iloc[-fh_new*5:],name='Geçmiş Veriler',mode='lines'))
-            fig1.add_trace(go.Scatter(x=forecasted.index,y=forecasted['forecasting'],name='Öngörüfig2',mode='lines'))
-
-            f_importance = pd.concat([pd.Series(X.columns.to_list(),name='Feature'),
-                          pd.Series(importance[2],name="Importance")],axis=1).sort_values(by='Importance')
-            
-            
-            fig2 = px.bar(f_importance.tail(20), x="Importance", y='Feature')
-            fig2.show()
+            fig1.add_trace(go.Scatter(x=df_final.datetime.iloc[0:16170],y=df_final['consumption (kWh)'].iloc[0:16170],name='Geçmiş Veriler',mode='lines'))
+            fig1.add_trace(go.Scatter(x=df_final.datetime.iloc[16170:],y=df_final['consumption (kWh)'].iloc[16170:],name='Öngörü',mode='lines'))
 
             #--------------------------------------------------------------------------------------------
 
             st.markdown("<h3 style='text-align:center;'>Tahmin sonuçları</h3>",unsafe_allow_html=True)
             st.plotly_chart(fig1)
-            st.markdown("<h3 style='text-align:center;'>Model için en önemli değişkenler</h3>",unsafe_allow_html=True)
-            st.plotly_chart(fig2)
 
 elif page == "Görselleştirme":
     st.markdown("<h1 style='text-align:center;'>Veri Görselleştirme Sekmesi</h1>",unsafe_allow_html=True)
