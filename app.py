@@ -56,11 +56,11 @@ def rolling_features(df,fh):
         df_c['consumption_lag_'+str(l)]=df_c['consumption (kWh)'].shift(l)
     return(df_c)
 
-def forecast_func(df,fh):
+def forecast_func(df,fh,i):
     fh_new=24*31+1
     date=pd.date_range(start=df.datetime.tail(1).iloc[0],periods=fh_new,freq='H',name='date')
     date = pd.DataFrame(index=date,columns=df.columns)
-    date.drop([0], axis=0)
+    date = date.drop(0)
     date= date.reset_index()
     del date['datetime']
     date.rename(columns={'date': 'datetime'}, inplace=True)
