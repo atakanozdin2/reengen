@@ -57,10 +57,13 @@ def rolling_features(df,fh):
     return(df_c)
 
 def forecast_func(df,fh):
-    fh_new=fh+1
-    date=pd.date_range(start=pd.to_datetime(df.datetime).tail(1).iloc[0], periods=fh_new, freq='H')
-    date=pd.DataFrame(date).rename(columns={0:"date"})
-    df_fe=pd.merge(df,date,how='outer')
+    fh_new=24*31+1
+    date=pd.date_range(start=df.datetime.tail(1).iloc[0],periods=fh_new,freq='H',name='date')
+    date = pd.DataFrame(index=date,columns=df.columns)
+    date= date.reset_index()
+    del date['datetime']
+    date.rename(columns={'date': 'datetime'}, inplace=True)
+    df_fe=df.append(date)
 
     #feature engineering
     df_fe=rolling_features(df_fe,fh_new)
